@@ -28,6 +28,7 @@ import java.awt.datatransfer.UnsupportedFlavorException;
 import java.io.*;
 import java.net.Socket;
 import java.util.*;
+import javax.swing.JOptionPane;
 import javax.xml.parsers.DocumentBuilderFactory;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
@@ -36,6 +37,8 @@ import org.w3c.dom.NodeList;
 public class Viking implements Runnable {
 
     //Global variables
+    //GUI manager
+    private VikingWindow mVikingWindow;
     private Socket mServerSocket;
     private String mServer;
     private int mPort;
@@ -135,39 +138,40 @@ public class Viking implements Runnable {
         mCommandsSyntax.put(HELP, "Usage - help");
     }
     //Used to send user input to various parts of the app. See class below for details
-    private UserInputBroadcaster mUserInputMon = new UserInputBroadcaster();
+//    private UserInputBroadcaster mUserInputMon = new UserInputBroadcaster();
     //UserInputListener which quits or dumps the log on user request.
-    private UserInputListener mQuitLogListner = new UserInputListener() {
-
-        @Override
-        public void userInputObtained(String line) {
-            try {
-                if (line.equals("exit"))
-                    quit();
-                if (line.equals("log"))
-                    System.out.println(mLog.toString());
-            } catch (Exception e) {
-            }
-        }
-    };
+//    private UserInputListener mQuitLogListner = new UserInputListener() {
+//
+//        @Override
+//        public void userInputObtained(String line) {
+//            try {
+//                if (line.equals("exit"))
+//                    quit();
+//                if (line.equals("log"))
+//                    System.out.println(mLog.toString());
+//            } catch (Exception e) {
+//            }
+//        }
+//    };
     /* UserInputListener that sends user input as an IRC command (in full form,
      * using PRIVMSG, NICK, etc and not "/msg" or "/nick") if said input starts
      * with ">"
      *
      * This is mainly for debug purposes but can also be used to change nick, etc
      */
-    private UserInputListener mUserIRCClient = new UserInputListener() {
-
-        @Override
-        public void userInputObtained(String line) {
-            try {
-                if (line.startsWith(">"))
-                    writeToServer(line.substring(1) + CRLF);
-            } catch (Exception e) {
-                System.out.println("Error communicating with server - " + e.getMessage());
-            }
-        }
-    };
+//    private UserInputListener mUserIRCClient = new UserInputListener() {
+//
+//        @Override
+//        public void userInputObtained(String line) {
+//            try {
+//                if (line.startsWith(">"))
+//                    writeToServer(line.substring(1) + CRLF);
+//            } catch (Exception e) {
+//                mVikingWindow.appendErrorToConsole(
+//                        "Error communicating with server - " + e.getMessage());
+//            }
+//        }
+//    };
     //Shell mode stuff
     //mShellProcess is the current running process that was exec()'d.
     private Process mShellProcess;
@@ -259,12 +263,15 @@ public class Viking implements Runnable {
     //Connect to server, set nick, and start main threads.
     private void initialize() {
         try {
+            //Start the GUI.
+            mVikingWindow = new VikingWindow(this);
+            mVikingWindow.setVisible(true);
             printGPLNotice();
             //Quit and log listener started before anything happens so that the user can
             //quit or view the log at anytime.
-            System.out.println("Type \"quit\" at any time to quit or \"log\" to view the log.");
-            mUserInputMon.addUserInputListener(mQuitLogListner);
-            mUserInputMon.start();
+            //System.out.println("Type \"quit\" at any time to quit or \"log\" to view the log.");
+//            mUserInputMon.addUserInputListener(mQuitLogListner);
+//            mUserInputMon.start();
             mProperties = new Properties();
             mProperties.load(new FileReader(new File(
                     System.getProperty("user.home")
@@ -272,64 +279,58 @@ public class Viking implements Runnable {
                     + "biIRC" + System.getProperty("file.separator")
                     + "biirccfg.txt")));
             mServer = mProperties.getProperty("server");
-            if (mServer == null || mServer.equals("")) {
-                System.out.println("Server not specified in config file. Exiting...");
-                System.exit(1);
-            }
+            if (mServer == null || mServer.equals(""))
+                mVikingWindow.appendErrorToConsole("Server not specified in config file.");
             try {
                 mPort = Integer.parseInt(mProperties.getProperty("port"));
             } catch (NumberFormatException e) {
-                System.out.println("Port invalid or not specified in config file. Exiting...");
-                System.exit(1);
+                mVikingWindow.appendErrorToConsole("Port invalid or not specified in config file.");
             }
             mNick = mProperties.getProperty("nick");
-            if (mNick == null || mNick.equals("")) {
-                System.out.println("Nick not specified in config file. Exiting...");
-                System.exit(1);
-            }
+            if (mNick == null || mNick.equals(""))
+                mVikingWindow.appendErrorToConsole("Nick not specified in config file.");
             mIdent = mProperties.getProperty("ident");
-            if (mIdent == null || mIdent.equals("")) {
-                System.out.println("Ident not specified in config file. Exiting...");
-                System.exit(1);
-            }
+            if (mIdent == null || mIdent.equals(""))
+                mVikingWindow.appendErrorToConsole("Ident not specified in config file.");
             mAltNick = mProperties.getProperty("altnick");
             mNickPass = mProperties.getProperty("nickpass");
             mGhost = Boolean.parseBoolean(mProperties.getProperty("ghost"));
             mPassphrase = mProperties.getProperty("passphrase");
-            if (mPassphrase == null || mPassphrase.length() < 6) {
-                System.out.println("Passphrase must be at least 6 characters long. Exiting...");
-                System.exit(1);
-            }
+            if (mPassphrase == null || mPassphrase.length() < 6)
+                mVikingWindow.appendErrorToConsole("Passphrase must be at least 6 characters long.");
 
             //Connect to IRC server
             //Keep retrying till a connection is established
-            System.out.println("Connecting to host " + mServer + " on port " + mPort + "...");
+            mVikingWindow.appendToConsole("Connecting to host " + mServer + " on port " + mPort + "...");
             while (true) {
                 try {
                     mServerSocket = new Socket(mServer, mPort);
                     break;
                 } catch (Exception e) {
-                    System.out.println("Error - " + e.getMessage());
-                    System.out.println("Retrying...");
+                    mVikingWindow.appendErrorToConsole("Error - " + e.getMessage());
+                    mVikingWindow.appendToConsole("Retrying...");
                 }
             }
-            System.out.println("Connected to server.");
+            mVikingWindow.appendToConsole("Connected to server.");
 
             //Initialize log
             mLog = new StringBuilder();
             mLog.append(LOG);
+            mVikingWindow.appendToLog(LOG);
 
             //Initialize input/output to server
             mServerWriter = new LoggedBufferedWriter(
                     new OutputStreamWriter(mServerSocket.getOutputStream()),
-                    mLog);
+                    mLog,
+                    mVikingWindow);
             mServerReader = new LoggedBufferedReader(
                     new InputStreamReader(mServerSocket.getInputStream()),
-                    mLog);
+                    mLog,
+                    mVikingWindow);
 
             //Set nick and ident, ghost if enabled
             mFinalNick = mNick;
-            System.out.println("Setting nick to " + mFinalNick);
+            mVikingWindow.appendToConsole("Setting nick to " + mFinalNick);
             writeToServer(NICK + mFinalNick + CRLF);
             writeToServer(USER + mIdent + " 0 * : " + CRLF);
             //Watch for reply from server and take appropriate action
@@ -338,57 +339,62 @@ public class Viking implements Runnable {
             outer:
             while ((line = mServerReader.readLine()) != null) {
                 //Reply code 432 => invalid nick
-                if (line.indexOf(" 432 ") > -1) {
-                    System.out.println("Invalid nick. Enter a new one and try again.");
-                    System.exit(1);
-                }
+                if (line.indexOf(" 432 ") > -1)
+                    mVikingWindow.appendErrorToConsole(
+                            "Invalid nick. Enter a new one and try again.");
                 //Reply code 433 => Nick in use
                 if (line.indexOf(" 433 ") > -1) {
-                    System.out.println("Nick already in use.");
+                    mVikingWindow.appendErrorToConsole("Nick already in use.");
                     if (!altNickAttempted && mAltNick != null && !mAltNick.equals("")) {
                         altNickAttempted = true;
                         mFinalNick = mAltNick;
-                        System.out.println("Setting nick to " + mFinalNick);
+                        mVikingWindow.appendToConsole("Setting nick to " + mFinalNick);
                         writeToServer(NICK + mFinalNick + CRLF);
                         writeToServer(USER + mIdent + " 0 * : " + CRLF);
                         continue;
                     }
-                    //Watch user input for a new nick.
-                    System.out.println("Enter another nick:");
-                    final Object lock = new Object();
-                    mUserInputMon.addUserInputListener(new UserInputListener() {
-
-                        @Override
-                        public void userInputObtained(String line) {
-                            try {
-                                mUserInputMon.removeUserInputListener(this);
-                                mFinalNick = line;
-                                System.out.println("Setting nick to " + mFinalNick);
-                                writeToServer(NICK + mFinalNick + CRLF);
-                                writeToServer(USER + mIdent + " 0 * : " + CRLF);
-                                //Notify that a new nick has been inputed and is being processed
-                                synchronized (lock) {
-                                    lock.notify();
-                                }
-                            } catch (Exception e) {
-                            }
-                        }
-                    });
-                    //Wait on the lock object till the listener calls notify
-                    try {
-                        synchronized (lock) {
-                            lock.wait();
-                        }
-                    } catch (Exception e) {
-                    }
+                    //Get a new nick.
+                    mFinalNick = JOptionPane.showInputDialog(mVikingWindow,
+                            "Nick already in use. Enter another one:");
+                    mVikingWindow.appendToConsole("Setting nick to " + mFinalNick);
+                    writeToServer(NICK + mFinalNick + CRLF);
+                    writeToServer(USER + mIdent + " 0 * : " + CRLF);
+//                    //Watch user input for a new nick.
+//                    mVikingWindow.appendToConsole("Enter another nick...");
+//                    final Object lock = new Object();
+//                    mUserInputMon.addUserInputListener(new UserInputListener() {
+//
+//                        @Override
+//                        public void userInputObtained(String line) {
+//                            try {
+//                                mUserInputMon.removeUserInputListener(this);
+//                                mFinalNick = line;
+//                                System.out.println("Setting nick to " + mFinalNick);
+//                                writeToServer(NICK + mFinalNick + CRLF);
+//                                writeToServer(USER + mIdent + " 0 * : " + CRLF);
+//                                //Notify that a new nick has been inputed and is being processed
+//                                synchronized (lock) {
+//                                    lock.notify();
+//                                }
+//                            } catch (Exception e) {
+//                            }
+//                        }
+//                    });
+//                    //Wait on the lock object till the listener calls notify
+//                    try {
+//                        synchronized (lock) {
+//                            lock.wait();
+//                        }
+//                    } catch (Exception e) {
+//                    }
                     //A new nick has been chosen. Restart the loop to listen for server reply
                     continue;
                 }
                 //Code 004 => Nick successfully set.
                 if (line.indexOf(" 004 ") > -1) {
-                    System.out.println("Nick set to " + mFinalNick + ".");
+                    mVikingWindow.appendToConsole("Nick set to " + mFinalNick + ".");
                     if (!mFinalNick.equals(mNick) && mGhost) {
-                        System.out.println("Attempting to ghost " + mNick + "...");
+                        mVikingWindow.appendToConsole("Attempting to ghost " + mNick + "...");
                         sendMessage("NickServ", "GHOST " + mNick + " " + mNickPass);
                     }
                     break;
@@ -402,7 +408,7 @@ public class Viking implements Runnable {
 
             //Identify with NickServ if a password is specified and the preferred nick worked.
             if (mNickPass != null & !mNickPass.equals("") && mNick.equals(mFinalNick)) {
-                System.out.println("Identifying for " + mFinalNick + "...");
+                mVikingWindow.appendToConsole("Identifying for " + mFinalNick + "...");
                 sendMessage("NickServ", "identify " + mNickPass);
             }
 
@@ -417,21 +423,21 @@ public class Viking implements Runnable {
             new Thread(this).start();
 
             //Start accepting manual IRC commands
-            mUserInputMon.addUserInputListener(mUserIRCClient);
+//            mUserInputMon.addUserInputListener(mUserIRCClient);
         } catch (IOException e) {
-            System.out.println("An error occured. Report the following data:");
+            mVikingWindow.appendErrorToConsole("An error occured. Report the following data:");
             e.printStackTrace(System.out);
         }
     }
 
     //Prints copyright and warranty notice
     private void printGPLNotice() {
-        System.out.println("biIRC  Copyright (C) 2012  Nihanth Subramanya");
-        System.out.println("This program comes with ABSOLUTELY NO WARRANTY.");
-        System.out.println("This is free software, and you are welcome to redistribute it "
+        mVikingWindow.appendToConsole("biIRC  Copyright (C) 2012  Nihanth Subramanya");
+        mVikingWindow.appendToConsole("This program comes with ABSOLUTELY NO WARRANTY.");
+        mVikingWindow.appendToConsole("This is free software, and you are welcome to redistribute it "
                 + "under certain conditions.");
-        System.out.println("For details see http://www.gnu.org/licenses/gpl-3.0.txt");
-        System.out.println();
+        mVikingWindow.appendToConsole("For details see http://www.gnu.org/licenses/gpl-3.0.txt");
+        mVikingWindow.appendToConsole("");
     }
 
     private String getCurrentAuthorizedNick() {
@@ -441,8 +447,11 @@ public class Viking implements Runnable {
     }
 
     //Send a quit message to the server, stop the main thread and exit
-    private void quit() throws IOException {
-        writeToServer(QUIT + CRLF);
+    void quit() {
+        try {
+            writeToServer(QUIT + CRLF);
+        } catch (IOException e) {
+        }
         synchronized (this) {
             run = false;
         }
@@ -489,7 +498,7 @@ public class Viking implements Runnable {
                 processPrivMsg(msg);
             }
         else if (keyword.trim().equals(NOTICE.trim()))
-            System.out.println("Notice from " + nick + ": " + msg);
+            mVikingWindow.appendToConsole("Notice from " + nick + ": " + msg);
     }
 
     /* Sends message to the current shell process as input.
@@ -811,7 +820,7 @@ public class Viking implements Runnable {
             sendMessage(getCurrentAuthorizedNick(),
                     "Error reading from macro file - " + e.getMessage());
         } catch (Exception e) {
-            System.out.println(e);
+            mVikingWindow.appendErrorToConsole(e.getMessage());
         }
     }
 
@@ -885,27 +894,27 @@ public class Viking implements Runnable {
 
     //Create a new Viking and initialize()
     public static void main(String[] args) throws IOException {
-        Viking viking = new Viking();
-        viking.initialize();
+        (new Viking()).initialize();
     }
 }
 
 //Convenience class which echoes all read lines to a StringBuilder log
 class LoggedBufferedReader extends BufferedReader {
 
+    private VikingWindow mVW;
     private StringBuilder mLog;
 
-    public LoggedBufferedReader(InputStreamReader inputstream, StringBuilder log) {
+    public LoggedBufferedReader(InputStreamReader inputstream, StringBuilder log, VikingWindow vw) {
         super(inputstream);
         mLog = log;
+        mVW = vw;
     }
 
     @Override
     public String readLine() throws IOException {
         String ret = super.readLine();
-        mLog.append("INCOMING ------>");
-        mLog.append(ret);
-        mLog.append("\r\n");
+        mLog.append("INCOMING----->").append(ret);
+        mVW.appendIncomingToLog(ret);
         return ret;
     }
 }
@@ -913,18 +922,20 @@ class LoggedBufferedReader extends BufferedReader {
 //Convenience class which echoes all written strings to a StringBuilder log
 class LoggedBufferedWriter extends BufferedWriter {
 
+    private VikingWindow mVW;
     private StringBuilder mLog;
 
-    public LoggedBufferedWriter(OutputStreamWriter outputstream, StringBuilder log) {
+    public LoggedBufferedWriter(OutputStreamWriter outputstream, StringBuilder log, VikingWindow vw) {
         super(outputstream);
         mLog = log;
+        mVW = vw;
     }
 
     @Override
     public void write(String s) throws IOException {
         super.write(s);
-        mLog.append("OUTGOING ------>");
-        mLog.append(s);
+        mLog.append("OUTGOING----->").append(s);
+        mVW.appendOutgoingToLog(s);
     }
 }
 
@@ -932,55 +943,56 @@ class LoggedBufferedWriter extends BufferedWriter {
  * This class monitors user input through System.in
  * It maintains a list of all listeners (added with addUserInputListener()) and sends user input
  * to all of them.
+ * No longer used since biIRC now has a GUI.
  */
-class UserInputBroadcaster implements Runnable {
-
-    private ArrayList<UserInputListener> mListeners;
-
-    public UserInputBroadcaster() {
-        mListeners = new ArrayList();
-    }
-
-    void addUserInputListener(UserInputListener listener) {
-        synchronized (this) {
-            mListeners.add(listener);
-        }
-    }
-
-    void removeUserInputListener(UserInputListener listener) {
-        synchronized (this) {
-            mListeners.remove(listener);
-        }
-    }
-
-    public void start() {
-        new Thread(this).start();
-    }
-
-    @Override
-    public void run() {
-        try {
-            BufferedReader br = new BufferedReader(
-                    new InputStreamReader(System.in));
-            String line;
-            while ((line = br.readLine()) != null) {
-                UserInputListener currentListeners[];
-                synchronized (this) {
-                    currentListeners = mListeners.toArray(
-                            new UserInputListener[0]);
-                }
-                for (UserInputListener l : currentListeners) {
-                    l.userInputObtained(line);
-                }
-            }
-        } catch (Exception e) {
-            e.printStackTrace(System.out);
-        }
-    }
-}
-
-//Interface for a listener to be used with a UserInputBroadcaster
-interface UserInputListener {
-
-    public void userInputObtained(String input);
-}
+//class UserInputBroadcaster implements Runnable {
+//
+//    private ArrayList<UserInputListener> mListeners;
+//
+//    public UserInputBroadcaster() {
+//        mListeners = new ArrayList();
+//    }
+//
+//    void addUserInputListener(UserInputListener listener) {
+//        synchronized (this) {
+//            mListeners.add(listener);
+//        }
+//    }
+//
+//    void removeUserInputListener(UserInputListener listener) {
+//        synchronized (this) {
+//            mListeners.remove(listener);
+//        }
+//    }
+//
+//    public void start() {
+//        new Thread(this).start();
+//    }
+//
+//    @Override
+//    public void run() {
+//        try {
+//            BufferedReader br = new BufferedReader(
+//                    new InputStreamReader(System.in));
+//            String line;
+//            while ((line = br.readLine()) != null) {
+//                UserInputListener currentListeners[];
+//                synchronized (this) {
+//                    currentListeners = mListeners.toArray(
+//                            new UserInputListener[0]);
+//                }
+//                for (UserInputListener l : currentListeners) {
+//                    l.userInputObtained(line);
+//                }
+//            }
+//        } catch (Exception e) {
+//            e.printStackTrace(System.out);
+//        }
+//    }
+//}
+//
+////Interface for a listener to be used with a UserInputBroadcaster
+//interface UserInputListener {
+//
+//    public void userInputObtained(String input);
+//}
