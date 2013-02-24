@@ -122,7 +122,7 @@ public class Viking implements Runnable {
         mCommands.put("movemouserel", CommandConstant.MOVE_MOUSE_REL);
         mCommands.put("pressmouse", CommandConstant.PRESS_MOUSE);
         mCommands.put("releasemouse", CommandConstant.RELEASE_MOUSE);
-        mCommands.put("clickmouse",CommandConstant.CLICK_MOUSE);
+        mCommands.put("clickmouse", CommandConstant.CLICK_MOUSE);
         mCommands.put("copyfile", CommandConstant.COPY_FILE);
         mCommands.put("movefile", CommandConstant.MOVE_FILE);
         mCommands.put("deletefile", CommandConstant.DELETE_FILE);
@@ -531,22 +531,15 @@ public class Viking implements Runnable {
         final String javaBin = System.getProperty("java.home") + File.separator + "bin" + File.separator + "java";
         final File currentJar = new File(
                 this.getClass().getProtectionDomain().getCodeSource().getLocation().toURI());
-
-        /*
-         * is it a jar file?
-         */
         if (!currentJar.getName().endsWith(".jar")) {
             return;
         }
-
-        /*
-         * Build command: java -jar application.jar
-         */
         final ArrayList<String> command = new ArrayList<String>();
         command.add(javaBin);
         command.add("-jar");
         command.add(currentJar.getPath());
 
+        quit();
         final ProcessBuilder builder = new ProcessBuilder(command);
         builder.start();
         System.exit(0);
